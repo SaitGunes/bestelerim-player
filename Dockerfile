@@ -2,13 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Requirements kopyala ve yükle
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ .
+# Uygulama kodunu kopyala
+COPY backend/server.py .
 
-# Railway dinamik port verir
-ENV PORT=8080
-EXPOSE $PORT
-
-CMD uvicorn server:app --host 0.0.0.0 --port $PORT
+# Railway PORT environment variable kullanır
+CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080}"]
