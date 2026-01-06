@@ -1,0 +1,141 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "Creative Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is king",
+      "Zoom in",
+      "Negative Space",
+      "Contrast"
+    ]
+  },
+  "project_context": {
+    "app_name": "Bestelerim Media Player",
+    "app_type": "Media Player Web App",
+    "target_audience": "Music lovers, independent artists",
+    "emotional_tone": "Professional, Moody, Immersive, Sleek",
+    "theme_strategy": "Dark Mode Only (Jewel & Luxury Archetype)"
+  },
+  "design_system": {
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-4xl md:text-6xl font-bold tracking-tight",
+        "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+        "h3": "text-2xl font-semibold",
+        "body": "text-base leading-relaxed",
+        "small": "text-sm text-muted-foreground"
+      }
+    },
+    "colors": {
+      "palette": {
+        "background": "#0a0a0a",
+        "foreground": "#fafafa",
+        "card": "#171717",
+        "card_foreground": "#fafafa",
+        "primary": "#6366f1",
+        "primary_foreground": "#fafafa",
+        "secondary": "#27272a",
+        "secondary_foreground": "#fafafa",
+        "muted": "#262626",
+        "muted_foreground": "#a3a3a3",
+        "accent": "#6366f1",
+        "accent_foreground": "#fafafa",
+        "border": "#262626",
+        "input": "#262626",
+        "ring": "#6366f1"
+      },
+      "gradients": {
+        "hero": "bg-gradient-to-br from-indigo-900/20 via-background to-background",
+        "card_hover": "hover:bg-white/5 transition-colors duration-300"
+      }
+    },
+    "spacing": {
+      "container_padding": "p-6 md:p-12",
+      "section_gap": "gap-8 md:gap-12",
+      "component_gap": "gap-4"
+    },
+    "borders": {
+      "radius": "rounded-xl",
+      "width": "border",
+      "style": "border-white/10"
+    },
+    "shadows": {
+      "card": "shadow-lg shadow-black/40",
+      "glow": "shadow-[0_0_15px_rgba(99,102,241,0.3)]"
+    }
+  },
+  "layout_strategy": {
+    "grid_system": "Bento Grid (Mode A)",
+    "structure": {
+      "sidebar": "w-64 hidden md:flex flex-col border-r border-white/10 bg-card/50 backdrop-blur-xl h-screen fixed left-0 top-0 z-40",
+      "main_content": "flex-1 md:ml-64 min-h-screen pb-24",
+      "player_bar": "fixed bottom-0 left-0 right-0 h-24 bg-black/80 backdrop-blur-xl border-t border-white/10 z-50 flex items-center px-6 md:px-12"
+    }
+  },
+  "components": {
+    "Card": {
+      "path": "/app/frontend/src/components/ui/card.jsx",
+      "style": "bg-card/40 border-white/5 hover:border-white/10 transition-all duration-300 group overflow-hidden backdrop-blur-sm",
+      "usage": "Used for Album Art, Song Details, and Stats"
+    },
+    "Button": {
+      "path": "/app/frontend/src/components/ui/button.jsx",
+      "style": "rounded-full font-medium transition-transform active:scale-95",
+      "variants": {
+        "primary": "bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow",
+        "ghost": "hover:bg-white/10 text-foreground"
+      }
+    },
+    "Slider": {
+      "path": "/app/frontend/src/components/ui/slider.jsx",
+      "style": "cursor-pointer",
+      "usage": "Progress bar and Volume control"
+    },
+    "Table": {
+      "path": "/app/frontend/src/components/ui/table.jsx",
+      "style": "w-full caption-bottom text-sm",
+      "usage": "Song list view"
+    }
+  },
+  "assets": {
+    "images": {
+      "default_album_art": "https://images.pexels.com/photos/7605490/pexels-photo-7605490.jpeg",
+      "hero_background": "https://images.pexels.com/photos/6587323/pexels-photo-6587323.jpeg",
+      "placeholder_vinyl": "https://images.pexels.com/photos/7605489/pexels-photo-7605489.jpeg"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "preferred": ["Play", "Pause", "SkipForward", "SkipBack", "Volume2", "ListMusic", "Github", "Search"]
+    }
+  },
+  "motion": {
+    "transitions": "transition-all duration-300 ease-out",
+    "hover_effects": "hover:-translate-y-1 hover:shadow-lg",
+    "micro_interactions": "active:scale-95"
+  },
+  "instructions_to_main_agent": [
+    "Implement a persistent bottom player bar that stays visible while navigating.",
+    "Use the 'Bento Grid' layout for the main dashboard view.",
+    "Ensure the 'Card' components for songs have a hover effect that reveals the Play button.",
+    "Use the provided Pexels images for default album art if no metadata is available.",
+    "Strictly follow the Dark Mode color palette defined in 'design_system.colors'.",
+    "Use 'Manrope' for all headings and 'Inter' for body text.",
+    "Ensure all interactive elements have 'data-testid' attributes.",
+    "Do not use gradients for text, keep it high contrast white/grey.",
+    "The player must handle both Audio (MP3) and Video formats gracefully."
+  ],
+  "universal_guidelines": [
+    "Avoid generic centered layouts.",
+    "Create depth through layered design elements.",
+    "Use glass-morphism effects with backdrop filters.",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable."
+  ]
+}
