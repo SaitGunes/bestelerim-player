@@ -1,9 +1,0 @@
-{
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "startCommand": "cd backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-8001}",
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
