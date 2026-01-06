@@ -7,6 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 
-EXPOSE 8001
+# Railway dinamik port verir
+ENV PORT=8080
+EXPOSE $PORT
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD uvicorn server:app --host 0.0.0.0 --port $PORT
