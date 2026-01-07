@@ -85,7 +85,7 @@ PLAYER_HTML = '''<!DOCTYPE html>
     <div class="container">
         <div class="artist-section">
             <img src="https://customer-assets.emergentagent.com/job_audio-hub-583/artifacts/7w97rm3o_AFEECBE7-E628-4369-9F8D-C39F9A7EA4A3.png" alt="Sait Gunes" class="artist-photo">
-            <div class="artist-info"><h1>Sait Gunes</h1><p class="tagline">Bestelerim</p><p class="subtitle">Kendi bestelerimi dinleyin ve kesfedin</p></div>
+            <div class="artist-info"><h1>Sait Gunes</h1><p class="tagline">Bestelerim</p><p class="subtitle">Dinlediyiniz için çok teşekkürler</p></div>
         </div>
         <div id="songs" class="song-list"><div class="loading">Sarkilar yukleniyor...</div></div>
     </div>
