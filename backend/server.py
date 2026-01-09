@@ -8,12 +8,31 @@ from typing import List, Optional
 import uuid
 from pathlib import Path
 from urllib.parse import quote
+from motor.motor_asyncio import AsyncIOMotorClient
 
 app = FastAPI(title="Bestelerim Media Player")
 
 GITHUB_REPO = "SaitGunes/bestelerim"
 GITHUB_API_BASE = "https://api.github.com"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
+
+# MongoDB
+MONGO_URL = os.environ.get("MONGO_URL", "")
+client = None
+db = None
+
+@app.on_event("startup")
+async def startup_db():
+    global client, db
+    if MONGO_URL:
+        client = AsyncIOMotorClient(MONGO_URL)
+        db = client.bestelerim
+
+@app.on_event("shutdown")
+async def shutdown_db():
+    global client
+    if client:
+        client.close()
 
 class MediaFile(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -22,6 +41,7 @@ class MediaFile(BaseModel):
     url: str
     type: str
     size: Optional[int] = None
+    likes: int = 0
 
 class MediaResponse(BaseModel):
     files: List[MediaFile]
@@ -59,7 +79,6 @@ PLAYER_HTML = '''<!DOCTYPE html>
         .artist-photo { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #6366f1; box-shadow: 0 0 30px rgba(99, 102, 241, 0.4); }
         .artist-info h1 { font-family: 'Manrope', sans-serif; font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
         .artist-info .tagline { color: #a5b4fc; font-size: 1.1rem; margin-bottom: 4px; }
-        .artist-info .subtitle { color: #888; margin: 0; font-size: 0.95rem; }
         .song-list { display: flex; flex-direction: column; gap: 12px; }
         .song-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px 20px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 16px; }
         .song-card:hover { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); transform: translateX(8px); }
@@ -68,6 +87,10 @@ PLAYER_HTML = '''<!DOCTYPE html>
         .song-info { flex: 1; }
         .song-title { font-weight: 600; font-size: 1.1rem; }
         .song-type { color: #888; font-size: 0.85rem; margin-top: 2px; }
+        .like-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 8px 12px; border-radius: 8px; transition: all 0.2s; display: flex; align-items: center; gap: 6px; color: #888; }
+        .like-btn:hover { background: rgba(255,255,255,0.1); color: #f87171; }
+        .like-btn.liked { color: #f87171; }
+        .like-count { font-size: 0.9rem; }
         .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.1); padding: 16px 20px; }
         .player-content { max-width: 900px; margin: 0 auto; }
         .now-playing { font-size: 0.9rem; color: #a5b4fc; margin-bottom: 12px; text-align: center; }
@@ -85,7 +108,7 @@ PLAYER_HTML = '''<!DOCTYPE html>
     <div class="container">
         <div class="artist-section">
             <img src="https://customer-assets.emergentagent.com/job_audio-hub-583/artifacts/7w97rm3o_AFEECBE7-E628-4369-9F8D-C39F9A7EA4A3.png" alt="Sait Gunes" class="artist-photo">
-            <div class="artist-info"><h1>Sait Gunes</h1><p class="tagline">Bestelerim</p><p class="subtitle">Dinlediyiniz için çok teşekkürler</p></div>
+            <div class="artist-info"><h1>Sait Gunes</h1><p class="tagline">Bestelerim</p></div>
         </div>
         <div id="songs" class="song-list"><div class="loading">Sarkilar yukleniyor...</div></div>
     </div>
@@ -99,13 +122,82 @@ PLAYER_HTML = '''<!DOCTYPE html>
     <script>
         let songs = [], currentIndex = -1;
         const audio = document.getElementById('audio'), nowPlaying = document.getElementById('nowPlaying');
-        async function loadSongs() { try { const res = await fetch('/api/media'); const data = await res.json(); songs = data.files; renderSongs(); } catch (e) { document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi</div>'; } }
-        function renderSongs() { const container = document.getElementById('songs'); if (songs.length === 0) { container.innerHTML = '<div class="loading">Henuz sarki yok</div>'; return; } container.innerHTML = songs.map((song, i) => '<div class="song-card" id="song-'+i+'" onclick="playSong('+i+')"><div class="song-icon">'+(song.type === 'audio' ? '🎵' : '🎬')+'</div><div class="song-info"><div class="song-title">'+song.display_name+'</div><div class="song-type">'+(song.type === 'audio' ? 'Ses Dosyasi' : 'Video')+'</div></div></div>').join(''); }
-        function playSong(index) { document.querySelectorAll('.song-card').forEach(c => c.classList.remove('active')); document.getElementById('song-'+index).classList.add('active'); currentIndex = index; const song = songs[index]; audio.src = song.url; audio.play(); nowPlaying.textContent = song.display_name; }
-        function togglePlay() { if (currentIndex === -1 && songs.length > 0) playSong(0); else if (audio.paused) audio.play(); else audio.pause(); }
-        function playNext() { if (songs.length === 0) return; playSong((currentIndex + 1) % songs.length); }
-        function playPrev() { if (songs.length === 0) return; playSong(currentIndex <= 0 ? songs.length - 1 : currentIndex - 1); }
-        audio.addEventListener('ended', playNext); loadSongs();
+        let likedSongs = JSON.parse(localStorage.getItem('likedSongs') || '[]');
+        
+        async function loadSongs() { 
+            try { 
+                const res = await fetch('/api/media'); 
+                const data = await res.json(); 
+                songs = data.files; 
+                renderSongs(); 
+            } catch (e) { 
+                document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi</div>'; 
+            } 
+        }
+        
+        function renderSongs() { 
+            const container = document.getElementById('songs'); 
+            if (songs.length === 0) { 
+                container.innerHTML = '<div class="loading">Henuz sarki yok</div>'; 
+                return; 
+            } 
+            container.innerHTML = songs.map((song, i) => {
+                const isLiked = likedSongs.includes(song.name);
+                return '<div class="song-card" id="song-'+i+'"><div class="song-icon" onclick="playSong('+i+')">'+(song.type === 'audio' ? '🎵' : '🎬')+'</div><div class="song-info" onclick="playSong('+i+')"><div class="song-title">'+song.display_name+'</div><div class="song-type">'+(song.type === 'audio' ? 'Ses Dosyasi' : 'Video')+'</div></div><button class="like-btn '+(isLiked ? 'liked' : '')+'" onclick="toggleLike(\''+song.name+'\', '+i+')"><span>❤</span><span class="like-count" id="likes-'+i+'">'+song.likes+'</span></button></div>';
+            }).join(''); 
+        }
+        
+        async function toggleLike(songName, index) {
+            const isLiked = likedSongs.includes(songName);
+            try {
+                const res = await fetch('/api/like/'+encodeURIComponent(songName), { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: isLiked ? 'unlike' : 'like'})
+                });
+                const data = await res.json();
+                document.getElementById('likes-'+index).textContent = data.likes;
+                
+                if (isLiked) {
+                    likedSongs = likedSongs.filter(n => n !== songName);
+                } else {
+                    likedSongs.push(songName);
+                }
+                localStorage.setItem('likedSongs', JSON.stringify(likedSongs));
+                
+                const btn = document.querySelectorAll('.like-btn')[index];
+                btn.classList.toggle('liked');
+            } catch(e) { console.error(e); }
+        }
+        
+        function playSong(index) { 
+            document.querySelectorAll('.song-card').forEach(c => c.classList.remove('active')); 
+            document.getElementById('song-'+index).classList.add('active'); 
+            currentIndex = index; 
+            const song = songs[index]; 
+            audio.src = song.url; 
+            audio.play(); 
+            nowPlaying.textContent = song.display_name; 
+        }
+        
+        function togglePlay() { 
+            if (currentIndex === -1 && songs.length > 0) playSong(0); 
+            else if (audio.paused) audio.play(); 
+            else audio.pause(); 
+        }
+        
+        function playNext() { 
+            if (songs.length === 0) return; 
+            playSong((currentIndex + 1) % songs.length); 
+        }
+        
+        function playPrev() { 
+            if (songs.length === 0) return; 
+            playSong(currentIndex <= 0 ? songs.length - 1 : currentIndex - 1); 
+        }
+        
+        audio.addEventListener('ended', playNext); 
+        loadSongs();
     </script>
 </body>
 </html>'''
@@ -128,9 +220,42 @@ async def get_media_files():
                     filename = item.get("name", "")
                     media_type = get_media_type(filename)
                     if media_type:
-                        media_files.append(MediaFile(name=filename, display_name=format_display_name(filename), url=f"{GITHUB_RAW_BASE}/{GITHUB_REPO}/main/{quote(filename)}", type=media_type, size=item.get("size")))
+                        likes = 0
+                        if db:
+                            like_doc = await db.likes.find_one({"song": filename})
+                            if like_doc:
+                                likes = like_doc.get("count", 0)
+                        media_files.append(MediaFile(name=filename, display_name=format_display_name(filename), url=f"{GITHUB_RAW_BASE}/{GITHUB_REPO}/main/{quote(filename)}", type=media_type, size=item.get("size"), likes=likes))
             return MediaResponse(files=media_files, repo=GITHUB_REPO, total=len(media_files))
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"GitHub error: {str(e)}")
+
+@app.post("/api/like/{song_name}")
+async def toggle_like(song_name: str, body: dict):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
+    
+    action = body.get("action", "like")
+    
+    if action == "like":
+        await db.likes.update_one(
+            {"song": song_name},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
+    else:
+        await db.likes.update_one(
+            {"song": song_name},
+            {"$inc": {"count": -1}},
+            upsert=True
+        )
+    
+    doc = await db.likes.find_one({"song": song_name})
+    count = doc.get("count", 0) if doc else 0
+    if count < 0:
+        await db.likes.update_one({"song": song_name}, {"$set": {"count": 0}})
+        count = 0
+    
+    return {"likes": count}
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
