@@ -14,6 +14,16 @@ GITHUB_REPO = "SaitGunes/bestelerim"
 GITHUB_API_BASE = "https://api.github.com"
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 
+GROUPS = {
+    "01": "Tüm Şarkılar",
+    "02": "Öne Çıkanlar",
+    "03": "Arabesk",
+    "04": "Hareketli",
+    "05": "Rap & Pop",
+    "06": "Enstrumental",
+    "07": "Diğer"
+}
+
 class MediaFile(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -21,6 +31,7 @@ class MediaFile(BaseModel):
     url: str
     type: str
     size: Optional[int] = None
+    groups: List[str] = ["01"]
 
 class MediaResponse(BaseModel):
     files: List[MediaFile]
@@ -38,8 +49,34 @@ def get_media_type(filename: str):
         return "video"
     return None
 
+def get_groups(filename: str):
+    name = Path(filename).stem
+    if '-' not in name:
+        return ["01"]
+    
+    parts = name.split('-', 1)
+    codes_part = parts[0]
+    
+    if not codes_part.isdigit():
+        return ["01"]
+    
+    codes = []
+    for i in range(0, len(codes_part), 2):
+        if i + 2 <= len(codes_part):
+            code = codes_part[i:i+2]
+            if code in GROUPS:
+                codes.append(code)
+    
+    if not codes:
+        return ["01"]
+    return codes
+
 def format_display_name(filename: str):
     name = Path(filename).stem
+    if '-' in name:
+        parts = name.split('-', 1)
+        if len(parts) > 1 and parts[0].isdigit():
+            name = parts[1]
     return name.replace('-', ' ').replace('_', ' ').title()
 
 PLAYER_HTML = '''<!DOCTYPE html>
@@ -53,10 +90,16 @@ PLAYER_HTML = '''<!DOCTYPE html>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); color: #fff; min-height: 100vh; }
         .container { max-width: 900px; margin: 0 auto; padding: 40px 20px 140px; }
-        .artist-section { display: flex; align-items: center; gap: 24px; margin-bottom: 40px; padding: 30px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; }
+        .artist-section { display: flex; align-items: center; gap: 24px; margin-bottom: 30px; padding: 30px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; }
         .artist-photo { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #6366f1; box-shadow: 0 0 30px rgba(99, 102, 241, 0.4); }
         .artist-info h1 { font-family: 'Manrope', sans-serif; font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
         .artist-info .tagline { color: #a5b4fc; font-size: 1.1rem; }
+        
+        .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+        .tab { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #888; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: all 0.3s; }
+        .tab:hover { background: rgba(99, 102, 241, 0.15); color: #fff; }
+        .tab.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+        
         .song-list { display: flex; flex-direction: column; gap: 12px; }
         .song-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px 20px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 16px; }
         .song-card:hover { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); transform: translateX(8px); }
@@ -65,6 +108,7 @@ PLAYER_HTML = '''<!DOCTYPE html>
         .song-info { flex: 1; }
         .song-title { font-weight: 600; font-size: 1.1rem; }
         .song-type { color: #888; font-size: 0.85rem; margin-top: 2px; }
+        
         .player-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 10, 0.95); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.1); padding: 16px 20px; }
         .player-content { max-width: 900px; margin: 0 auto; }
         .now-playing { font-size: 0.9rem; color: #a5b4fc; margin-bottom: 12px; text-align: center; }
@@ -74,7 +118,15 @@ PLAYER_HTML = '''<!DOCTYPE html>
         .btn:hover { background: rgba(99, 102, 241, 0.3); }
         .btn-play { background: #6366f1; padding: 10px 30px; }
         .loading { text-align: center; padding: 60px; color: #888; }
-        @media (max-width: 600px) { .artist-section { flex-direction: column; text-align: center; } .artist-photo { width: 100px; height: 100px; } .artist-info h1 { font-size: 1.8rem; } }
+        .empty-msg { text-align: center; padding: 40px; color: #666; }
+        
+        @media (max-width: 600px) { 
+            .artist-section { flex-direction: column; text-align: center; } 
+            .artist-photo { width: 100px; height: 100px; } 
+            .artist-info h1 { font-size: 1.8rem; }
+            .tabs { justify-content: center; }
+            .tab { padding: 8px 14px; font-size: 0.8rem; }
+        }
     </style>
 </head>
 <body>
@@ -83,25 +135,110 @@ PLAYER_HTML = '''<!DOCTYPE html>
             <img src="https://customer-assets.emergentagent.com/job_audio-hub-583/artifacts/7w97rm3o_AFEECBE7-E628-4369-9F8D-C39F9A7EA4A3.png" alt="Sait Gunes" class="artist-photo">
             <div class="artist-info"><h1>Sait Gunes</h1><p class="tagline">Bestelerim</p></div>
         </div>
+        
+        <div class="tabs" id="tabs"></div>
         <div id="songs" class="song-list"><div class="loading">Sarkilar yukleniyor...</div></div>
     </div>
+    
     <div class="player-bar">
         <div class="player-content">
             <div class="now-playing" id="nowPlaying">Sarki secin</div>
             <audio id="audio" controls></audio>
-            <div class="controls"><button class="btn" onclick="playPrev()">Onceki</button><button class="btn btn-play" onclick="togglePlay()">Oynat</button><button class="btn" onclick="playNext()">Sonraki</button></div>
+            <div class="controls">
+                <button class="btn" onclick="playPrev()">Onceki</button>
+                <button class="btn btn-play" onclick="togglePlay()">Oynat</button>
+                <button class="btn" onclick="playNext()">Sonraki</button>
+            </div>
         </div>
     </div>
+    
     <script>
-        let songs = [], currentIndex = -1;
+        const GROUPS = {
+            "01": "Tüm Şarkılar",
+            "02": "Öne Çıkanlar", 
+            "03": "Arabesk",
+            "04": "Hareketli",
+            "05": "Rap & Pop",
+            "06": "Enstrumental",
+            "07": "Diğer"
+        };
+        
+        let songs = [], currentIndex = -1, activeGroup = "01";
         const audio = document.getElementById('audio'), nowPlaying = document.getElementById('nowPlaying');
-        async function loadSongs() { try { const res = await fetch('/api/media'); const data = await res.json(); songs = data.files; renderSongs(); } catch (e) { document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi</div>'; } }
-        function renderSongs() { const c = document.getElementById('songs'); if (!songs.length) { c.innerHTML = '<div class="loading">Henuz sarki yok</div>'; return; } c.innerHTML = songs.map((s, i) => '<div class="song-card" id="song-'+i+'" onclick="playSong('+i+')"><div class="song-icon">'+(s.type==='audio'?'🎵':'🎬')+'</div><div class="song-info"><div class="song-title">'+s.display_name+'</div><div class="song-type">'+(s.type==='audio'?'Ses':'Video')+'</div></div></div>').join(''); }
-        function playSong(i) { document.querySelectorAll('.song-card').forEach(c => c.classList.remove('active')); document.getElementById('song-'+i).classList.add('active'); currentIndex = i; audio.src = songs[i].url; audio.play(); nowPlaying.textContent = songs[i].display_name; }
-        function togglePlay() { if (currentIndex === -1 && songs.length) playSong(0); else audio.paused ? audio.play() : audio.pause(); }
-        function playNext() { if (songs.length) playSong((currentIndex + 1) % songs.length); }
-        function playPrev() { if (songs.length) playSong(currentIndex <= 0 ? songs.length - 1 : currentIndex - 1); }
-        audio.onended = playNext; loadSongs();
+        
+        async function loadSongs() { 
+            try { 
+                const res = await fetch('/api/media'); 
+                const data = await res.json(); 
+                songs = data.files; 
+                renderTabs();
+                renderSongs(); 
+            } catch (e) { 
+                document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi</div>'; 
+            } 
+        }
+        
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabs');
+            const availableGroups = new Set();
+            songs.forEach(s => s.groups.forEach(g => availableGroups.add(g)));
+            
+            let tabsHtml = '';
+            Object.entries(GROUPS).forEach(([code, name]) => {
+                if (availableGroups.has(code)) {
+                    tabsHtml += '<button class="tab '+(code === activeGroup ? 'active' : '')+'" onclick="filterGroup(\\''+code+'\\')" data-group="'+code+'">'+name+'</button>';
+                }
+            });
+            tabsContainer.innerHTML = tabsHtml;
+        }
+        
+        function filterGroup(code) {
+            activeGroup = code;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.tab[data-group="'+code+'"]').classList.add('active');
+            renderSongs();
+        }
+        
+        function renderSongs() { 
+            const c = document.getElementById('songs');
+            let filtered = songs.filter(s => s.groups.includes(activeGroup));
+            
+            if (!filtered.length) { 
+                c.innerHTML = '<div class="empty-msg">Bu grupta sarki yok</div>'; 
+                return; 
+            }
+            
+            c.innerHTML = filtered.map((s) => {
+                const realIndex = songs.findIndex(song => song.id === s.id);
+                return '<div class="song-card" id="song-'+realIndex+'" onclick="playSong('+realIndex+')"><div class="song-icon">'+(s.type==='audio'?'🎵':'🎬')+'</div><div class="song-info"><div class="song-title">'+s.display_name+'</div><div class="song-type">'+(s.type==='audio'?'Ses':'Video')+'</div></div></div>';
+            }).join(''); 
+        }
+        
+        function playSong(i) { 
+            document.querySelectorAll('.song-card').forEach(c => c.classList.remove('active')); 
+            const el = document.getElementById('song-'+i);
+            if (el) el.classList.add('active'); 
+            currentIndex = i; 
+            audio.src = songs[i].url; 
+            audio.play(); 
+            nowPlaying.textContent = songs[i].display_name; 
+        }
+        
+        function togglePlay() { 
+            if (currentIndex === -1 && songs.length) playSong(0); 
+            else audio.paused ? audio.play() : audio.pause(); 
+        }
+        
+        function playNext() { 
+            if (songs.length) playSong((currentIndex + 1) % songs.length); 
+        }
+        
+        function playPrev() { 
+            if (songs.length) playSong(currentIndex <= 0 ? songs.length - 1 : currentIndex - 1); 
+        }
+        
+        audio.onended = playNext; 
+        loadSongs();
     </script>
 </body>
 </html>'''
@@ -121,7 +258,15 @@ async def get_media():
             if item.get("type") == "file":
                 t = get_media_type(item["name"])
                 if t:
-                    files.append(MediaFile(name=item["name"], display_name=format_display_name(item["name"]), url=f"{GITHUB_RAW_BASE}/{GITHUB_REPO}/main/{quote(item['name'])}", type=t, size=item.get("size")))
+                    groups = get_groups(item["name"])
+                    files.append(MediaFile(
+                        name=item["name"], 
+                        display_name=format_display_name(item["name"]), 
+                        url=f"{GITHUB_RAW_BASE}/{GITHUB_REPO}/main/{quote(item['name'])}", 
+                        type=t, 
+                        size=item.get("size"),
+                        groups=groups
+                    ))
         return MediaResponse(files=files, repo=GITHUB_REPO, total=len(files))
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
