@@ -175,7 +175,7 @@ PLAYER_HTML = '''<!DOCTYPE html>
                 renderTabs();
                 renderSongs(); 
             } catch (e) { 
-                document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi</div>'; 
+                document.getElementById('songs').innerHTML = '<div class="loading">Yukleme hatasi veya suan kapali</div>'; 
             } 
         }
         
